@@ -1,0 +1,13 @@
+streamlit
+folium
+streamlit-folium
+requests
+python-dotenv
+transformers
+torch
+xgboost
+shap
+scikit-learn
+pandas
+numpy
+matplotlib
