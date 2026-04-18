@@ -1,6 +1,12 @@
 import streamlit as st
 import folium
 import requests
+import pickle
+import numpy as np
+import shap
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 from streamlit_folium import st_folium
 from dotenv import load_dotenv
 from distress_detector import analyze_text
@@ -10,30 +16,62 @@ import os
 load_dotenv()
 WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-# Page config
-st.set_page_config(page_title="DisasterSenseAI", page_icon="🚨", layout="wide")
-st.title("🚨 DisasterSenseAI")
-st.subheader("Real-Time Disaster Risk Dashboard")
+# Load ML model and explainer
+with open("disaster_model.pkl", "rb") as f:
+    model = pickle.load(f)
+with open("shap_explainer.pkl", "rb") as f:
+    explainer = pickle.load(f)
 
-# ─────────────────────────────────────────
-# SIMULATED SOCIAL MEDIA DISTRESS SIGNALS
-# In Week 5 we replace these with real data
-# ─────────────────────────────────────────
-DISTRESS_SIGNALS = [
-    {"text": "Help! Earthquake destroyed our building, people trapped inside!", "lat": -51.7, "lon": -72.5, "location": "Chile"},
-    {"text": "SOS! Flooding everywhere, we are stranded on rooftop!", "lat": 13.7, "lon": 100.5, "location": "Bangkok"},
-    {"text": "Everything is fine here, just a small tremor felt", "lat": 35.6, "lon": 139.6, "location": "Tokyo"},
-    {"text": "Need urgent rescue! House collapsed after earthquake!", "lat": -8.3, "lon": 115.1, "location": "Bali"},
-    {"text": "Roads blocked by landslide, we are stuck!", "lat": 27.7, "lon": 85.3, "location": "Nepal"},
-    {"text": "Beautiful day today, nothing unusual here", "lat": 40.7, "lon": -74.0, "location": "New York"},
-    {"text": "Gas leak detected near earthquake zone, please help!", "lat": 37.7, "lon": 15.0, "location": "Sicily"},
-    {"text": "Just felt a tremor, everything seems okay now", "lat": 19.4, "lon": -155.2, "location": "Hawaii"},
-    {"text": "Tsunami warning! People running to higher ground!", "lat": 3.5, "lon": 98.6, "location": "Sumatra"},
-    {"text": "Minor shaking felt, no damage reported", "lat": 33.4, "lon": 73.0, "location": "Pakistan"},
+FEATURES = [
+    "magnitude", "wind_speed", "temperature",
+    "weather_severity", "distress_count",
+    "hour_of_day", "population_proxy"
 ]
 
 # ─────────────────────────────────────────
-# FETCH EARTHQUAKE DATA
+# PAGE CONFIG
+# ─────────────────────────────────────────
+st.set_page_config(
+    page_title="DisasterSenseAI",
+    page_icon="🚨",
+    layout="wide"
+)
+
+# Custom CSS for professional look
+st.markdown("""
+<style>
+    .metric-card {
+        background: #1e1e2e;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #333;
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #ff4b4b;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        color: #aaa;
+        margin-top: 4px;
+    }
+    .risk-high { color: #ff4b4b; font-weight: bold; }
+    .risk-med  { color: #ffa500; font-weight: bold; }
+    .risk-low  { color: #00cc88; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────
+st.title("🚨 DisasterSenseAI")
+st.markdown("**Real-Time Multi-Modal Disaster Risk Intelligence Platform**")
+st.markdown("---")
+
+# ─────────────────────────────────────────
+# DATA FETCHING
 # ─────────────────────────────────────────
 @st.cache_data(ttl=300)
 def get_earthquakes():
@@ -41,9 +79,6 @@ def get_earthquakes():
     response = requests.get(url)
     return response.json()["features"]
 
-# ─────────────────────────────────────────
-# FETCH WEATHER DATA
-# ─────────────────────────────────────────
 @st.cache_data(ttl=300)
 def get_weather(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric"
@@ -52,45 +87,6 @@ def get_weather(lat, lon):
         return response.json()
     return None
 
-# ─────────────────────────────────────────
-# CALCULATE RISK SCORE
-# ─────────────────────────────────────────
-def calculate_risk(magnitude, weather, nearby_distress=0):
-    risk = 0
-
-    # Earthquake contribution
-    if magnitude >= 6:
-        risk += 50
-    elif magnitude >= 5:
-        risk += 35
-    elif magnitude >= 4:
-        risk += 20
-    else:
-        risk += 10
-
-    # Weather contribution
-    if weather:
-        wind_speed = weather["wind"]["speed"]
-        weather_id = weather["weather"][0]["id"]
-        if wind_speed > 20:
-            risk += 20
-        elif wind_speed > 10:
-            risk += 10
-        if weather_id < 300:
-            risk += 20
-        elif weather_id < 600:
-            risk += 10
-        elif weather_id < 700:
-            risk += 10
-
-    # Human distress signal contribution
-    risk += nearby_distress * 15
-
-    return min(risk, 100)
-
-# ─────────────────────────────────────────
-# ANALYZE DISTRESS SIGNALS
-# ─────────────────────────────────────────
 @st.cache_data(ttl=300)
 def analyze_all_signals():
     results = []
@@ -103,166 +99,264 @@ def analyze_all_signals():
     return results
 
 # ─────────────────────────────────────────
-# MAIN APP
+# ML PREDICTION
+# ─────────────────────────────────────────
+def ml_predict(magnitude, wind_speed, temperature,
+               weather_severity, distress_count,
+               hour_of_day=12, population_proxy=0.5):
+
+    features = np.array([[
+        magnitude, wind_speed, temperature,
+        weather_severity, distress_count,
+        hour_of_day, population_proxy
+    ]])
+
+    prob = model.predict_proba(features)[0][1]
+    risk_score = int(prob * 100)
+
+    if risk_score >= 70:
+        risk_label = "🔴 HIGH"
+        color = "red"
+    elif risk_score >= 40:
+        risk_label = "🟠 MEDIUM"
+        color = "orange"
+    else:
+        risk_label = "🔵 LOW"
+        color = "blue"
+
+    shap_vals = explainer.shap_values(features)[0]
+    explanation = dict(zip(FEATURES, shap_vals))
+
+    return risk_score, risk_label, color, explanation
+
+def plot_shap(explanation, place):
+    features = list(explanation.keys())
+    values = list(explanation.values())
+
+    colors = ["#ff4b4b" if v > 0 else "#00cc88" for v in values]
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    fig.patch.set_facecolor('#1e1e2e')
+    ax.set_facecolor('#1e1e2e')
+
+    bars = ax.barh(features, values, color=colors)
+    ax.set_xlabel("SHAP Value (impact on risk)", color="white")
+    ax.set_title(f"Why this risk score?\n{place[:40]}", color="white", fontsize=9)
+    ax.tick_params(colors="white")
+    ax.spines['bottom'].set_color('#555')
+    ax.spines['left'].set_color('#555')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axvline(x=0, color='white', linewidth=0.5)
+
+    plt.tight_layout()
+    return fig
+
+# ─────────────────────────────────────────
+# DISTRESS SIGNALS
+# ─────────────────────────────────────────
+DISTRESS_SIGNALS = [
+    {"text": "Help! Earthquake destroyed our building, people trapped inside!", "lat": -51.7, "lon": -72.5, "location": "Chile"},
+    {"text": "SOS! Flooding everywhere, we are stranded on rooftop!", "lat": 13.7, "lon": 100.5, "location": "Bangkok"},
+    {"text": "Everything is fine here, just a small tremor felt", "lat": 35.6, "lon": 139.6, "location": "Tokyo"},
+    {"text": "Need urgent rescue! House collapsed after earthquake!", "lat": -8.3, "lon": 115.1, "location": "Bali"},
+    {"text": "Roads blocked by landslide, we are stuck!", "lat": 27.7, "lon": 85.3, "location": "Nepal"},
+    {"text": "Beautiful day today, nothing unusual here", "lat": 40.7, "lon": -74.0, "location": "New York"},
+    {"text": "Gas leak detected near earthquake zone, please help!", "lat": 37.7, "lon": 15.0, "location": "Sicily"},
+    {"text": "Tsunami warning! People running to higher ground!", "lat": 3.5, "lon": 98.6, "location": "Sumatra"},
+]
+
+# ─────────────────────────────────────────
+# LOAD DATA
 # ─────────────────────────────────────────
 earthquakes = get_earthquakes()
 
-# Analyze distress signals
 with st.spinner("🧠 AI analyzing distress signals..."):
     signal_results = analyze_all_signals()
 
 distress_count = sum(1 for s in signal_results if s["is_distress"])
+high_risk_list = []
 
-# Sidebar
-st.sidebar.title("📊 Risk Summary")
-st.sidebar.write(f"🌍 Earthquakes detected: **{len(earthquakes)}**")
-st.sidebar.write(f"🚨 Distress signals: **{distress_count}**")
+# ─────────────────────────────────────────
+# TOP METRICS ROW
+# ─────────────────────────────────────────
+col1, col2, col3, col4 = st.columns(4)
 
-# Create map with layer control
-m = folium.Map(location=[20, 0], zoom_start=2)
-earthquake_layer = folium.FeatureGroup(name="🌍 Earthquakes")
-distress_layer = folium.FeatureGroup(name="🚨 Distress Signals")
+with col1:
+    st.metric("🌍 Earthquakes Detected", len(earthquakes))
+with col2:
+    st.metric("🚨 Distress Signals", distress_count)
+with col3:
+    st.metric("🧠 AI Model", "XGBoost")
+with col4:
+    st.metric("📊 Model AUC-ROC", "0.9777")
 
-# Store risk data
-risk_list = []
+st.markdown("---")
 
-# Progress
-progress = st.progress(0)
-status = st.empty()
+# ─────────────────────────────────────────
+# TWO COLUMN LAYOUT
+# ─────────────────────────────────────────
+left_col, right_col = st.columns([2, 1])
 
-# Plot earthquakes
-for i, quake in enumerate(earthquakes):
-    coords = quake["geometry"]["coordinates"]
-    props = quake["properties"]
-    lon = coords[0]
-    lat = coords[1]
-    magnitude = props["mag"]
-    place = props["place"]
+with left_col:
+    st.subheader("🗺️ Live Risk Map")
 
-    progress.progress((i + 1) / len(earthquakes))
-    status.text(f"Analyzing {place}...")
+    m = folium.Map(location=[20, 0], zoom_start=2)
+    earthquake_layer = folium.FeatureGroup(name="🌍 Earthquakes")
+    distress_layer   = folium.FeatureGroup(name="🚨 Distress Signals")
 
-    weather = get_weather(lat, lon)
-    risk_score = calculate_risk(magnitude, weather)
+    progress = st.progress(0)
+    status   = st.empty()
 
-    if risk_score >= 70:
-        color = "red"
-        risk_level = "🔴 HIGH"
-    elif risk_score >= 40:
-        color = "orange"
-        risk_level = "🟠 MEDIUM"
-    else:
-        color = "blue"
-        risk_level = "🔵 LOW"
+    for i, quake in enumerate(earthquakes):
+        coords = quake["geometry"]["coordinates"]
+        props  = quake["properties"]
+        lon, lat, magnitude = coords[0], coords[1], props["mag"]
+        place = props["place"]
 
-    weather_info = ""
-    if weather:
-        temp = weather["main"]["temp"]
-        wind = weather["wind"]["speed"]
-        desc = weather["weather"][0]["description"]
-        weather_info = f" | 🌡️ {temp}°C | 💨 {wind} m/s | {desc}"
+        progress.progress((i + 1) / len(earthquakes))
+        status.text(f"🧠 ML analyzing: {place[:40]}...")
 
-    folium.CircleMarker(
-        location=[lat, lon],
-        radius=magnitude * 3,
-        color=color,
-        fill=True,
-        fill_opacity=0.7,
-        popup=folium.Popup(
-            f"📍 {place}\n"
-            f"⚡ Magnitude: {magnitude}\n"
-            f"🎯 Risk: {risk_score}/100 {risk_level}\n"
-            f"{weather_info}",
-            max_width=250
+        weather = get_weather(lat, lon)
+
+        # Extract weather features
+        wind_speed       = weather["wind"]["speed"] if weather else 10
+        temperature      = weather["main"]["temp"] if weather else 20
+        weather_id       = weather["weather"][0]["id"] if weather else 800
+        weather_severity = 2 if weather_id < 300 else 1 if weather_id < 700 else 0
+
+        # ML PREDICTION (replaces old rule-based scoring)
+        risk_score, risk_label, color, explanation = ml_predict(
+            magnitude, wind_speed, temperature,
+            weather_severity, distress_count
         )
-    ).add_to(earthquake_layer)
 
-    risk_list.append({
-        "place": place,
-        "magnitude": magnitude,
-        "risk_score": risk_score,
-        "risk_level": risk_level
-    })
+        # Store high risk
+        if risk_score >= 70:
+            high_risk_list.append({
+                "place": place,
+                "magnitude": magnitude,
+                "risk_score": risk_score,
+                "risk_label": risk_label,
+                "explanation": explanation
+            })
 
-progress.empty()
-status.empty()
+        weather_info = ""
+        if weather:
+            weather_info = (f" | 🌡️ {temperature}°C"
+                          f" | 💨 {wind_speed}m/s"
+                          f" | {weather['weather'][0]['description']}")
 
-# Plot distress signals on map
-for signal in signal_results:
-    if signal["is_distress"]:
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=magnitude * 3,
+            color=color,
+            fill=True,
+            fill_opacity=0.7,
+            popup=folium.Popup(
+                f"📍 {place}\n"
+                f"⚡ Magnitude: {magnitude}\n"
+                f"🎯 ML Risk Score: {risk_score}/100\n"
+                f"{risk_label}\n"
+                f"{weather_info}",
+                max_width=280
+            )
+        ).add_to(earthquake_layer)
+
+    progress.empty()
+    status.empty()
+
+    # Distress markers
+    for signal in signal_results:
+        icon_color = "red" if signal["is_distress"] else "green"
+        icon_sign  = "exclamation-sign" if signal["is_distress"] else "ok-sign"
         folium.Marker(
             location=[signal["lat"], signal["lon"]],
             popup=folium.Popup(
-                f"🚨 DISTRESS DETECTED\n"
+                f"{'🚨 DISTRESS' if signal['is_distress'] else '✅ SAFE'}\n"
                 f"📍 {signal['location']}\n"
                 f"💬 {signal['text'][:60]}...\n"
-                f"🧠 AI Confidence: {signal['confidence']}%",
+                f"🧠 Confidence: {signal['confidence']}%",
                 max_width=250
             ),
-            icon=folium.Icon(color="red", icon="exclamation-sign")
+            icon=folium.Icon(color=icon_color, icon=icon_sign)
         ).add_to(distress_layer)
+
+    earthquake_layer.add_to(m)
+    distress_layer.add_to(m)
+    folium.LayerControl().add_to(m)
+    st_folium(m, width=800, height=500)
+
+# ─────────────────────────────────────────
+# RIGHT COLUMN — Alerts + SHAP
+# ─────────────────────────────────────────
+with right_col:
+    st.subheader("🚨 Live Alerts")
+
+    if high_risk_list:
+        for zone in high_risk_list[:4]:
+            with st.expander(f"🔴 {zone['place'][:35]}"):
+                st.write(f"**Magnitude:** {zone['magnitude']}")
+                st.write(f"**Risk Score:** {zone['risk_score']}/100")
+                st.write(f"**Level:** {zone['risk_label']}")
+                st.write("**Why this score?**")
+                fig = plot_shap(zone["explanation"], zone["place"])
+                st.pyplot(fig)
+                plt.close()
     else:
-        folium.Marker(
-            location=[signal["lat"], signal["lon"]],
-            popup=folium.Popup(
-                f"✅ NO DISTRESS\n"
-                f"📍 {signal['location']}\n"
-                f"💬 {signal['text'][:60]}...\n"
-                f"🧠 AI Confidence: {signal['confidence']}%",
-                max_width=250
-            ),
-            icon=folium.Icon(color="green", icon="ok-sign")
-        ).add_to(distress_layer)
+        st.success("✅ No high risk zones right now")
 
-# Add layers to map
-earthquake_layer.add_to(m)
-distress_layer.add_to(m)
-folium.LayerControl().add_to(m)
-
-# ─────────────────────────────────────────
-# ALERT BANNERS
-# ─────────────────────────────────────────
-high_risk = [r for r in risk_list if r["risk_score"] >= 70]
-
-if high_risk or distress_count > 0:
-    st.error(f"🚨 ALERT: {len(high_risk)} high risk zone(s) | {distress_count} distress signal(s) detected!")
-    for zone in high_risk[:3]:
-        st.error(f"📍 {zone['place']} — Magnitude {zone['magnitude']} — Risk: {zone['risk_score']}/100")
-else:
-    st.success("✅ No high risk zones detected currently.")
-
-# Distress signal alerts
-if distress_count > 0:
-    st.warning(f"🧠 AI detected {distress_count} distress signals from social media:")
+    st.markdown("---")
+    st.subheader("🧠 Distress Signals")
     for s in signal_results:
         if s["is_distress"]:
-            st.warning(f"📍 {s['location']} — {s['confidence']}% confidence — \"{s['text'][:70]}...\"")
+            st.warning(f"📍 **{s['location']}** — {s['confidence']}%\n\n"
+                      f"_{s['text'][:55]}..._")
 
 # ─────────────────────────────────────────
-# MAP
+# CUSTOM SCENARIO PREDICTOR
 # ─────────────────────────────────────────
-st.subheader("🗺️ Live Risk Map")
-st_folium(m, width=1200, height=550)
+st.markdown("---")
+st.subheader("🔬 Custom Scenario Predictor")
+st.markdown("**Type any values and get instant AI prediction with explanation**")
 
-# ─────────────────────────────────────────
-# SIDEBAR TOP 5
-# ─────────────────────────────────────────
-st.sidebar.subheader("🔥 Top 5 Danger Zones")
-top5 = sorted(risk_list, key=lambda x: x["risk_score"], reverse=True)[:5]
-for i, zone in enumerate(top5):
-    st.sidebar.markdown(f"""
-**#{i+1} {zone['place']}**
-- Magnitude: {zone['magnitude']}
-- Risk: {zone['risk_level']} ({zone['risk_score']}/100)
----
-""")
+pred_col1, pred_col2, pred_col3 = st.columns(3)
 
-st.sidebar.subheader("🚨 Distress Signals")
-for s in signal_results:
-    if s["is_distress"]:
-        st.sidebar.markdown(f"""
-**📍 {s['location']}**
-- Confidence: {s['confidence']}%
-- "{s['text'][:40]}..."
----
-""")
+with pred_col1:
+    p_magnitude  = st.slider("⚡ Magnitude",        2.5, 9.0, 5.0, 0.1)
+    p_wind       = st.slider("💨 Wind Speed (m/s)", 0,   50,  10)
+
+with pred_col2:
+    p_temp       = st.slider("🌡️ Temperature (°C)", -10, 45, 20)
+    p_weather    = st.selectbox("☁️ Weather", [0, 1, 2],
+                                format_func=lambda x: ["Clear", "Rain", "Storm"][x])
+
+with pred_col3:
+    p_distress   = st.slider("🚨 Distress Signals", 0, 10, 2)
+    p_hour       = st.slider("🕐 Hour of Day",       0, 23, 12)
+    p_population = st.slider("👥 Population Density", 0.0, 1.0, 0.5)
+
+if st.button("🧠 Predict Risk Now", type="primary"):
+    risk_score, risk_label, color, explanation = ml_predict(
+        p_magnitude, p_wind, p_temp,
+        p_weather, p_distress,
+        p_hour, p_population
+    )
+
+    res_col1, res_col2 = st.columns([1, 2])
+
+    with res_col1:
+        st.markdown(f"### Risk Score: **{risk_score}/100**")
+        st.markdown(f"### Level: **{risk_label}**")
+
+        if risk_score >= 70:
+            st.error("🚨 HIGH RISK — Immediate action needed!")
+        elif risk_score >= 40:
+            st.warning("⚠️ MEDIUM RISK — Monitor closely")
+        else:
+            st.success("✅ LOW RISK — Situation under control")
+
+    with res_col2:
+        fig = plot_shap(explanation, "Custom Scenario")
+        st.pyplot(fig)
+        plt.close()
