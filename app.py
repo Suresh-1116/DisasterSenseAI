@@ -14,7 +14,12 @@ import os
 
 # Load API key
 load_dotenv()
-WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+try:
+    # Streamlit Cloud
+    WEATHER_API_KEY = st.secrets["OPENWEATHER_API_KEY"]
+except:
+    # Local development
+    WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 # Load ML model and explainer
 with open("disaster_model.pkl", "rb") as f:
