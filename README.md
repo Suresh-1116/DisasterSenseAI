@@ -1,4 +1,4 @@
-# 🚨 DisasterSenseAI
+#  DisasterSenseAI
 ### Real-Time Multi-Modal Disaster Risk Intelligence Platform
  
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat-square&logo=python)
@@ -9,11 +9,11 @@
  
 > **An AI system that fuses live earthquake data, real-time weather signals, and NLP-based human distress detection into a unified disaster risk score — with explainable AI showing exactly WHY each decision was made.**
  
-🌐 **[Live Demo →](https://disastersenseai.streamlit.app)**
+ **[Live Demo →](https://disastersenseai.streamlit.app)**
  
 ---
  
-## 🎯 The Problem
+##  The Problem
  
 When disasters strike, emergency responders face three critical questions:
 - **Where** is the danger right now?
@@ -25,7 +25,7 @@ DisasterSenseAI solves this.
  
 ---
  
-## 🧠 How It Works
+##  How It Works
  
 ```
 Live Seismic Data (USGS)     ──┐
@@ -46,34 +46,31 @@ NLP Distress Signals           ──┘    Trained on
  
 ---
  
-## ✨ Features
+##  Features
  
-- 🌍 **Live Earthquake Map** — Real-time USGS data plotted on interactive world map
-- 🌦️ **Weather Fusion** — OpenWeather API layered with seismic signals per location
-- 🧠 **NLP Distress Detection** — Zero-shot HuggingFace classifier detects SOS messages with confidence scores
-- 📊 **XGBoost Risk Model** — 94% accuracy, 0.9777 AUC-ROC, trained on 5,000 disaster scenarios
-- 🔍 **SHAP Explainability** — Every prediction comes with a bar chart explaining the top risk factors
-- 🚨 **Live Alert Panel** — Auto-ranked danger zones with expandable SHAP explanations
-- 🎮 **Custom Scenario Predictor** — Input any values and get instant AI prediction with explanation
+-  **Live Earthquake Map** — Real-time USGS data plotted on interactive world map
+-  **Weather Fusion** — OpenWeather API layered with seismic signals per location
+-  **NLP Distress Detection** — Zero-shot HuggingFace classifier detects SOS messages with confidence scores
+-  **XGBoost Risk Model** — 94% accuracy, 0.9777 AUC-ROC, trained on 5,000 disaster scenarios
+-  **SHAP Explainability** — Every prediction comes with a bar chart explaining the top risk factors
+-  **Live Alert Panel** — Auto-ranked danger zones with expandable SHAP explanations
+-  **Custom Scenario Predictor** — Input any values and get instant AI prediction with explanation
 ---
  
-## 📸 Screenshots
- 
+##  Screenshots
+
 ### Main Dashboard
-![Dashboard](<img width="1914" height="969" alt="Screenshot 2026-04-18 132949" src="https://github.com/user-attachments/assets/dd0bea3c-05d0-416d-a058-26c093e1da0a" />
-)
- 
+![Dashboard](https://github.com/user-attachments/assets/0da0363f-2f51-4239-90e4-aa768947359a)
+
 ### SHAP Explainability
-![SHAP](<img width="1905" height="917" alt="Screenshot 2026-04-18 133014" src="https://github.com/user-attachments/assets/c72015fa-6890-4549-b689-536d5735b1ea" />
-)
- 
+![SHAP](https://github.com/user-attachments/assets/c72015fa-6890-4549-b689-536d5735b1ea)
+
 ### Custom Scenario Predictor
-![Predictor](<img width="1908" height="919" alt="Screenshot 2026-04-18 133044" src="https://github.com/user-attachments/assets/36a76603-a1eb-499a-9c01-4dd926605302" />
-)
+![Predictor](https://github.com/user-attachments/assets/36a76603-a1eb-499a-9c01-4dd926605302)
  
 ---
  
-## 🔧 Tech Stack
+##  Tech Stack
  
 | Layer | Technology |
 |-------|-----------|
@@ -88,7 +85,7 @@ NLP Distress Signals           ──┘    Trained on
  
 ---
  
-## 🚀 Run Locally
+##  Run Locally
  
 ### 1. Clone the repo
 ```bash
@@ -127,7 +124,7 @@ python -m streamlit run app.py
  
 ---
  
-## 📊 Model Performance
+##  Model Performance
  
 | Metric | Score |
 |--------|-------|
@@ -142,7 +139,7 @@ The model learned that **magnitude** and **distress signal count** are the stron
  
 ---
  
-## 🗂️ Project Structure
+##  Project Structure
  
 ```
 DisasterSenseAI/
@@ -162,7 +159,7 @@ DisasterSenseAI/
  
 ---
  
-## 💡 What I Learned
+##  What I Learned
  
 Building this project from scratch taught me:
 - **Multi-modal AI** — fusing structured data (seismic, weather) with unstructured data (text signals)
@@ -171,7 +168,7 @@ Building this project from scratch taught me:
 - **Production deployment** — Docker concepts, environment secrets, Streamlit Cloud
 ---
  
-## 🔮 Future Improvements
+##  Future Improvements
  
 - [ ] Integrate real Twitter/X API for live distress signal detection
 - [ ] Add satellite imagery analysis using YOLOv8 for building damage detection
@@ -180,7 +177,7 @@ Building this project from scratch taught me:
 - [ ] Mobile-responsive UI
 ---
  
-## 👤 Author
+##  Author
  
 **V Suresh Kumar**
 - GitHub: [@Suresh-1116](https://github.com/Suresh-1116)
@@ -188,11 +185,11 @@ Building this project from scratch taught me:
 - Email: vsureshkumar1116@gmail.com
 ---
  
-## 📄 License
+##  License
  
 MIT License — feel free to use and build on this project.
  
 ---
  
-⭐ If this project helped you, please give it a star!
+ If this project helped you, please give it a star!
  
