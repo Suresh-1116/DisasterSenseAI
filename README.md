@@ -9,7 +9,7 @@
  
 > **An AI system that fuses live earthquake data, real-time weather signals, and NLP-based human distress detection into a unified disaster risk score — with explainable AI showing exactly WHY each decision was made.**
  
- **[Live Demo →](https://disastersenseai.streamlit.app)**
+ **[Live Demo →](https://disastersenseai-wn49iz6mpyrv5gtiqyyfx9.streamlit.app/)**
  
 ---
  
