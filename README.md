@@ -60,13 +60,13 @@ NLP Distress Signals           ──┘    Trained on
 ##  Screenshots
 
 ### Main Dashboard
-![Dashboard](https://github.com/user-attachments/assets/0da0363f-2f51-4239-90e4-aa768947359a)
+![Dashboard](https://github.com/user-attachments/assets/f6a5388c-5fb2-4cad-9362-c67eb2ca5104)
 
 ### SHAP Explainability
-![SHAP](https://github.com/user-attachments/assets/c72015fa-6890-4549-b689-536d5735b1ea)
+![SHAP](https://github.com/user-attachments/assets/facec94d-c1b2-41e9-ba79-796bb80e61a5)
 
 ### Custom Scenario Predictor
-![Predictor](https://github.com/user-attachments/assets/36a76603-a1eb-499a-9c01-4dd926605302)
+![Predictor](https://github.com/user-attachments/assets/d343d9dc-5ee8-47ba-ae2f-89ca8ad208f4)
  
 ---
  
